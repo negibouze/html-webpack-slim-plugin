@@ -54,8 +54,7 @@ plugins: [
   }),
   new HtmlWebpackPlugin({
     template: 'src/views/test.slim',
-    filename: 'test.slim',
-    filetype: 'slim'
+    filename: 'test.slim'
   }),
   new HtmlWebpackSlimPlugin()
 ]  

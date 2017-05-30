@@ -20,13 +20,25 @@ HtmlWebpackSlimPlugin.prototype.apply = function (compiler) {
 };
 
 /**
+ * Is it processing target
+ * @param htmlPluginData
+ * @return bool processing target -> true
+ */
+HtmlWebpackSlimPlugin.prototype.isProcessingTarget = function (htmlPluginData) {
+  var target = ['slim'];
+  var ext = htmlPluginData.outputName.split('.').pop();
+  var fileType = htmlPluginData.plugin.options.filetype;
+  // If the plugin configuration set `filename` extension or `filetype` to 'slim'
+  return target.indexOf(ext) >= 0 || target.indexOf(fileType) >= 0;
+};
+
+/**
  * Process the generated HTML（before assets injection）
  */
 HtmlWebpackSlimPlugin.prototype.preProcessHtml = function (htmlPluginData, callback) {
   var self = this;
   var options = htmlPluginData.plugin.options;
-  // If the plugin configuration set `filename` ends with `.slim` or `filetype` to 'slim'
-  if (htmlPluginData.outputName.endsWith('.slim') || options.filetype === 'slim') {
+  if (self.isProcessingTarget(htmlPluginData)) {
     htmlPluginData.html = self.adjustElementsIndentation(htmlPluginData.html);
   }
   callback(null, htmlPluginData);
@@ -38,8 +50,8 @@ HtmlWebpackSlimPlugin.prototype.preProcessHtml = function (htmlPluginData, callb
 HtmlWebpackSlimPlugin.prototype.postProcessHtml = function (htmlPluginData, callback) {
   var self = this;
   var options = htmlPluginData.plugin.options;
-  // If the plugin configuration set `inject` to true and (set `filename` ends with `.slim` or `filetype` to 'slim')
-  if (options.inject && (htmlPluginData.outputName.endsWith('.slim') || options.filetype === 'slim')) {
+  // If the plugin configuration set `inject` to true and (set `filename` extension or `filetype` to 'slim')
+  if (options.inject && self.isProcessingTarget(htmlPluginData)) {
     if (options.filename === 'index.html') {
       htmlPluginData.outputName = 'index.slim';
       htmlPluginData.plugin.childCompilationOutputName = 'index.slim';
@@ -68,10 +80,14 @@ HtmlWebpackSlimPlugin.prototype.adjustElementsIndentation = function (html) {
  *    html lang="en"
  *      head
  *        meta charset="utf-8"
- *    meta http-equiv="X-UA-Compatible" content="IE=edge"
+ *        meta http-equiv="X-UA-Compatible" content="IE=edge"
  *    meta name="viewport" content="width=device-width, initial-scale=1"
  *    meta name="description" content="Webpack App"
- *        title Webpack App
+ *        title
+ *          - if i.odd?
+ *            HtmlWebpackPlugin example
+ *          - else
+ *            Webpack App
  *  after
  *    html lang="en"
  *      head
@@ -79,7 +95,11 @@ HtmlWebpackSlimPlugin.prototype.adjustElementsIndentation = function (html) {
  *        meta http-equiv="X-UA-Compatible" content="IE=edge"
  *        meta name="viewport" content="width=device-width, initial-scale=1"
  *        meta name="description" content="Webpack App"
- *        title Webpack App
+ *        title
+ *          - if i.odd?
+ *            HtmlWebpackPlugin example
+ *          - else
+ *            Webpack App
  * @param html htmlPluginData.html (Slim)
  */
 HtmlWebpackSlimPlugin.prototype.adjustHeadElementsIndentation = function (html) {
@@ -89,7 +109,8 @@ HtmlWebpackSlimPlugin.prototype.adjustHeadElementsIndentation = function (html) 
   if (match) {
     var indent = match[2];
     var elements = match[3].split('\n').map(function(v) {
-      return indent + v.trim();
+      var m = /^([\s]*).*$/g.exec(v);
+      return (m[1] === '' ? indent : '') + v.replace(/[ 　]+$/, '');
     });
     html = html.replace(regExp, match[1] + elements.join('\n') + match[4]);
   }
@@ -132,7 +153,11 @@ HtmlWebpackSlimPlugin.prototype.adjustHeadElementsIndentation = function (html) 
  */
 HtmlWebpackSlimPlugin.prototype.adjustBodyElementsIndentation = function (html) {
   var self = this;
-  var regExp = /^( *)(body.*\n)( *[\s\S]*)/im;
+  var regExp = function(html) {
+    var h = /^( *)head/im.exec(html);
+    var topSpace = h ? h[1] : ' *';
+    return new RegExp('^(' + topSpace + ')(body.*\\n)( *[\\s\\S]*)', 'im');;
+  }(html);
   var match = regExp.exec(html);
   if (match) {
     var padding = false;
@@ -182,18 +207,19 @@ HtmlWebpackSlimPlugin.prototype.injectAssetsIntoFile = function (htmlPluginData)
   var styles = self.headExtraction(html).map(function (e) {
     return e.match(/title>.*<\/title/i) ? 'title ' + options.title : e;
   });
-  var scripts = self.bodyExtraction(html);
+  var scripts = htmlPluginData.plugin.options.inject !== 'head' ? self.bodyExtraction(html) : [];
   var file = hasTemplate ? self.removeUnnecessaryTags(html) : self.defaultTemplate();
 
   return self.injectAssets(file, styles, scripts, assets);
 };
 
 /**
- * Default template
+ * Is a valid template file set?
+ * @param filename template file name
  */
 HtmlWebpackSlimPlugin.prototype.hasTemplate = function (filename) {
   var ext = filename.split('.').pop();
-  return ext === 'slim' || ext === 'js';
+  return ['slim', 'js'].indexOf(ext) >= 0;
 };
 
 /**
@@ -217,7 +243,7 @@ HtmlWebpackSlimPlugin.prototype.headExtraction = function (html) {
   if (!match || match.length < 2) {
     return [];
   }
-  return match[1].split('><');
+  return match[1].split('><').filter(function(v) { return !v.startsWith('/') });
 };
 
 /**
@@ -252,8 +278,12 @@ HtmlWebpackSlimPlugin.prototype.removeUnnecessaryTags = function (html) {
  */
 HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, assets) {
   var self = this;
-  var bodyRegExp = /^( *)(body)\b/im;
-  var match = bodyRegExp.exec(html);
+  var regExp = function(html) {
+    var h = /^( *)head/im.exec(html);
+    var topSpace = h ? h[1] : ' *';
+    return new RegExp('^(' + topSpace + ')(body)\\b', 'im');;
+  }(html);
+  var match = regExp.exec(html);
   if (match) {
     var headSpace = match[1];
     var hlSpace = headSpace.repeat(2);
@@ -265,7 +295,7 @@ HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, asset
         head = [headSpace + 'head'].concat(head)
       }
       // Append assets to head element
-      html = html.replace(bodyRegExp, head.join('\n') + '\n' + match[0]);
+      html = html.replace(regExp, head.join('\n') + '\n' + match[0]);
     }
 
     if (body.length) {
@@ -281,16 +311,26 @@ HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, asset
   }
 
   // Inject manifest into the opening html tag
-  if (assets.manifest) {
-    html = html.replace(/^(html.*)$/im, function (match, start) {
-      // Append the manifest only if no manifest was specified
-      if (/\smanifest\s*=/.test(match)) {
-        return match;
-      }
-      return start + ' manifest="' + assets.manifest + '"';
-    });
-  }
+  html = self.injectManifest(html, assets);
   return html;
+};
+
+/**
+ * Inject manifest into the opening html tag
+ * @param html htmlPluginData.html (Slim)
+ * @param assets
+ */
+HtmlWebpackSlimPlugin.prototype.injectManifest = function (html, assets) {
+  if (!assets.manifest) {
+    return html;
+  }
+  return html = html.replace(/^(html.*)$/im, function (match, start) {
+    // Append the manifest only if no manifest was specified
+    if (/\smanifest\s*=/.test(match)) {
+      return match;
+    }
+    return start + ' manifest="' + assets.manifest + '"';
+  });
 };
 
 module.exports = HtmlWebpackSlimPlugin;

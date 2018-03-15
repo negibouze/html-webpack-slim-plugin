@@ -305,7 +305,11 @@ HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, asset
   var match = regExp.exec(html);
   if (match) {
     var headSpace = match[1];
-    var hlSpace = headSpace.repeat(2);
+    var hlSpace = function(space, html) {
+      // delete extra space (left space of html tag)
+      var m = /^([ |\t]*)html/im.exec(html);
+      return m ? space.replace(m[1], '') : space;
+    }(headSpace.repeat(2), html);
     if (head.length) {
       head = head.map(function(v) {
         return hlSpace + v;
@@ -343,7 +347,7 @@ HtmlWebpackSlimPlugin.prototype.injectManifest = function (html, assets) {
   if (!assets.manifest) {
     return html;
   }
-  return html = html.replace(/^(html.*)$/im, function (match, start) {
+  return html = html.replace(/^([ |\t]*html.*)$/im, function (match, start) {
     // Append the manifest only if no manifest was specified
     if (/\smanifest\s*=/.test(match)) {
       return match;

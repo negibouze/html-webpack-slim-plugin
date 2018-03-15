@@ -68,10 +68,29 @@ HtmlWebpackSlimPlugin.prototype.postProcessHtml = function (htmlPluginData, call
  */
 HtmlWebpackSlimPlugin.prototype.adjustElementsIndentation = function (html) {
   var self = this;
+  html = self.deleteExtraNewlines(html);
   html = self.adjustHeadElementsIndentation(html);
   html = self.adjustBodyElementsIndentation(html);
   return html;
 };
+
+/**
+ * Delete trailing extra newlines
+ * e.g.
+ *  before
+ *   %div{ :id =>'footer' }
+ *     Footer content
+ *
+ *
+ *  after
+ *   %div{ :id =>'footer' }
+ *     Footer content
+ *
+ * @param html htmlPluginData.html (Slim)
+ */
+HtmlWebpackSlimPlugin.prototype.deleteExtraNewlines = function (html) {
+  return html.replace(/(\r?\n){2,}$/im, '$1');
+}
 
 /**
  * Adjust head elements indentation
@@ -104,7 +123,7 @@ HtmlWebpackSlimPlugin.prototype.adjustElementsIndentation = function (html) {
  */
 HtmlWebpackSlimPlugin.prototype.adjustHeadElementsIndentation = function (html) {
   var self = this;
-  var regExp = /^( *head\n)( *)([\s\S]*)(\n *body)/im;
+  var regExp = /^([ |\t]*head\n)([ |\t]*)([\s\S]*)(\n[ |\t]*body)/im;
   var match = regExp.exec(html);
   if (match) {
     var indent = match[2];
@@ -154,9 +173,9 @@ HtmlWebpackSlimPlugin.prototype.adjustHeadElementsIndentation = function (html) 
 HtmlWebpackSlimPlugin.prototype.adjustBodyElementsIndentation = function (html) {
   var self = this;
   var regExp = function(html) {
-    var h = /^( *)head/im.exec(html);
-    var topSpace = h ? h[1] : ' *';
-    return new RegExp('^(' + topSpace + ')(body.*\\n)( *[\\s\\S]*)', 'im');;
+    var h = /^([ |\t]*)head/im.exec(html);
+    var topSpace = h ? h[1] : '[ |\t]*';
+    return new RegExp('^(' + topSpace + ')(body.*\\n)([ |\t]*[\\s\\S]*)', 'im');;
   }(html);
   var match = regExp.exec(html);
   if (match) {
@@ -177,7 +196,7 @@ HtmlWebpackSlimPlugin.prototype.adjustBodyElementsIndentation = function (html) 
         newElements.push(elm.trim());
         continue;
       }
-      var m = /^( *).*$/i.exec(elm);
+      var m = /^([ |\t]*).*$/i.exec(elm);
       // If the indentation is shallower than the body
       if (padding || (m && (m[1].length < indent.length))) {
         // After that, add indentation to all elements
@@ -279,8 +298,8 @@ HtmlWebpackSlimPlugin.prototype.removeUnnecessaryTags = function (html) {
 HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, assets) {
   var self = this;
   var regExp = function(html) {
-    var h = /^( *)head/im.exec(html);
-    var topSpace = h ? h[1] : ' *';
+    var h = /^([ |\t]*)head/im.exec(html);
+    var topSpace = h ? h[1] : '[ |\t]*';
     return new RegExp('^(' + topSpace + ')(body)\\b', 'im');;
   }(html);
   var match = regExp.exec(html);

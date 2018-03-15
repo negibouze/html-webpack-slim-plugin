@@ -26,6 +26,10 @@ module.exports = {
       template: 'template.slim',
       filetype: 'slim'
     }),
+    new HtmlWebpackPlugin({
+      template: 'template-tab.slim',
+      filename: 'index-tab.slim'
+    }),
     new HtmlWebpackSlimPlugin()
   ]
 };

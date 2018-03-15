@@ -29,6 +29,11 @@ module.exports = {
       filename: 'layout2.slim',
       inject: 'body'
     }),
+    new HtmlWebpackPlugin({
+      template: 'template2-tab.slim',
+      filename: 'layout2-tab.slim',
+      inject: 'body'
+    }),
     new HtmlWebpackSlimPlugin()
   ]
 };

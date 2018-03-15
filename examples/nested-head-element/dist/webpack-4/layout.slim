@@ -1,0 +1,35 @@
+doctype html
+html lang="en"
+  head
+    meta charset="utf-8"
+    meta http-equiv="X-UA-Compatible" content="IE=edge"
+    meta name="viewport" content="width=device-width, initial-scale=1"
+    meta name="description" content="Webpack App"
+    title
+      - if i.odd?
+        HtmlWebpackPlugin example
+      - else
+        Webpack App
+    link href="styles.css" rel="stylesheet"
+    script type="text/javascript" src="bundle.js"
+  body
+    h1 Markup examples
+
+    #content
+      p This example shows you how a basic Slim file looks.
+
+    == yield
+
+    - if items.any?
+      table#items
+        - for item in items
+          tr
+            td.name = item.name
+            td.price = item.price
+    - else
+      p No items found. Please add some inventory.
+        Thank you!
+
+    div id="footer"
+      == render 'footer'
+      | Copyright &copy; #{@year} #{@author}

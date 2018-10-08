@@ -232,9 +232,9 @@ HtmlWebpackSlimPlugin.prototype.adjustBodyElementsIndentation = function (html) 
 HtmlWebpackSlimPlugin.prototype.injectAssetsIntoFile = function (htmlPluginData) {
   var self = this;
   var options = htmlPluginData.plugin.options;
-  var assets = htmlPluginData.assets
+  var assets = htmlPluginData.assets;
   var html = htmlPluginData.html;
-  var hasTemplate = self.hasTemplate(options.template);
+  var hasTemplate = ('templateContent' in options && options.filetype === 'slim') || self.hasTemplate(options.template);
   if (!hasTemplate) {
     html = html.replace(/\r?\n[ ]*/g, '');
   }

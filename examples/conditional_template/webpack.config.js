@@ -24,7 +24,7 @@ module.exports = {
     new ExtractTextPlugin('styles.css'),
     new HtmlWebpackPlugin({
       template: 'template.slim',
-      filetype: 'slim'
+      filename: 'index.slim'
     }),
     new HtmlWebpackPlugin({
       template: 'template-tab.slim',

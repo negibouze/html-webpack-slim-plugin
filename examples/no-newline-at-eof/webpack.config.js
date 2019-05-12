@@ -22,7 +22,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       title: 'HtmlWebpackPlugin example',
       template: 'template.slim',
-      filetype: 'slim'
+      filename: 'index.slim'
     }),
     new HtmlWebpackPlugin({
       title: 'HtmlWebpackPlugin example',

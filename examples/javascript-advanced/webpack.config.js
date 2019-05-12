@@ -26,7 +26,7 @@ module.exports = {
     }),
     new HtmlWebpackPlugin({
       template: 'template-slim.js',
-      filetype: 'slim'
+      filename: 'index.slim'
     }),
     new HtmlWebpackSlimPlugin()
   ]

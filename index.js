@@ -7,33 +7,75 @@ function HtmlWebpackSlimPlugin (options) {
 }
 
 HtmlWebpackSlimPlugin.prototype.apply = function (compiler) {
+  var pluginName = 'HtmlWebpackSlimPlugin';
   var self = this;
   // Hook into the html-webpack-plugin processing
-  var beforeProcessing = {
-    name: 'html-webpack-plugin-before-html-processing',
-    cb: function (htmlPluginData, callback) {
-      self.preProcessHtml(htmlPluginData, callback);
-    }
+  var beforeAssetsInjection = function (htmlPluginData, callback) {
+    self.preProcessHtml(htmlPluginData, callback);
   }
-  var afterProcessing = {
-    name: 'html-webpack-plugin-after-html-processing',
-    cb: function (htmlPluginData, callback) {
-      self.postProcessHtml(htmlPluginData, callback);
-    }
+  var afterAssetsInjection = function (htmlPluginData, callback) {
+    self.postProcessHtml(htmlPluginData, callback);
   }
+  // Webpack 4+
   if (compiler.hooks) {
-    // setup hooks for webpack 4
-    compiler.hooks.compilation.tap('HtmlWebpackSlimPlugin', function (compilation) {
-      compilation.hooks.htmlWebpackPluginBeforeHtmlProcessing.tapAsync(beforeProcessing.name, beforeProcessing.cb);
-      compilation.hooks.htmlWebpackPluginAfterHtmlProcessing.tapAsync(afterProcessing.name, afterProcessing.cb);
+    compiler.hooks.compilation.tap(pluginName, function (compilation) {
+      var myHooks = (function (comp) {
+        if (comp.hooks.htmlWebpackPluginBeforeHtmlGeneration) {
+          // HtmlWebPackPlugin 3.x
+          return [
+            { hook: comp.hooks.htmlWebpackPluginBeforeHtmlProcessing, func: beforeAssetsInjection},
+            { hook: comp.hooks.htmlWebpackPluginAfterHtmlProcessing, func: afterAssetsInjection},
+          ];
+        } else {
+          // HtmlWebPackPlugin 4.x
+          var HtmlWebpackPlugin = require('html-webpack-plugin');
+          var hooks = HtmlWebpackPlugin.getHooks(comp);
+          return [
+            { hook: hooks.afterTemplateExecution, func: beforeAssetsInjection},
+            { hook: hooks.beforeEmit, func: afterAssetsInjection},
+          ];
+        }
+      })(compilation);
+      myHooks.forEach(function (v) {
+        v.hook.tapAsync(pluginName, v.func);
+      })
     });
   } else {
     compiler.plugin('compilation', function (compilation) {
-      compilation.plugin(beforeProcessing.name, beforeProcessing.cb);
-      compilation.plugin(afterProcessing.name, afterProcessing.cb);
+      compilation.plugin('html-webpack-plugin-before-html-processing', beforeAssetsInjection);
+      compilation.plugin('html-webpack-plugin-after-html-processing', afterAssetsInjection);
     });
   }
 };
+
+// HtmlWebpackSlimPlugin.prototype.apply = function (compiler) {
+//   var self = this;
+//   // Hook into the html-webpack-plugin processing
+//   var beforeProcessing = {
+//     name: 'html-webpack-plugin-before-html-processing',
+//     cb: function (htmlPluginData, callback) {
+//       self.preProcessHtml(htmlPluginData, callback);
+//     }
+//   }
+//   var afterProcessing = {
+//     name: 'html-webpack-plugin-after-html-processing',
+//     cb: function (htmlPluginData, callback) {
+//       self.postProcessHtml(htmlPluginData, callback);
+//     }
+//   }
+//   if (compiler.hooks) {
+//     // setup hooks for webpack 4
+//     compiler.hooks.compilation.tap('HtmlWebpackSlimPlugin', function (compilation) {
+//       compilation.hooks.htmlWebpackPluginBeforeHtmlProcessing.tapAsync(beforeProcessing.name, beforeProcessing.cb);
+//       compilation.hooks.htmlWebpackPluginAfterHtmlProcessing.tapAsync(afterProcessing.name, afterProcessing.cb);
+//     });
+//   } else {
+//     compiler.plugin('compilation', function (compilation) {
+//       compilation.plugin(beforeProcessing.name, beforeProcessing.cb);
+//       compilation.plugin(afterProcessing.name, afterProcessing.cb);
+//     });
+//   }
+// };
 
 /**
  * Is it processing target
@@ -53,8 +95,9 @@ HtmlWebpackSlimPlugin.prototype.isProcessingTarget = function (htmlPluginData) {
  */
 HtmlWebpackSlimPlugin.prototype.preProcessHtml = function (htmlPluginData, callback) {
   var self = this;
-  var options = htmlPluginData.plugin.options;
   if (self.isProcessingTarget(htmlPluginData)) {
+    // do not minify
+    htmlPluginData.plugin.options.minify = false;
     htmlPluginData.html = self.adjustElementsIndentation(htmlPluginData.html);
   }
   callback(null, htmlPluginData);
@@ -232,7 +275,7 @@ HtmlWebpackSlimPlugin.prototype.adjustBodyElementsIndentation = function (html) 
 HtmlWebpackSlimPlugin.prototype.injectAssetsIntoFile = function (htmlPluginData) {
   var self = this;
   var options = htmlPluginData.plugin.options;
-  var assets = htmlPluginData.assets;
+  var assets = self.getAssets(htmlPluginData);
   var html = htmlPluginData.html;
   var hasTemplate = ('templateContent' in options && options.filetype === 'slim') || self.hasTemplate(options.template);
   if (!hasTemplate) {
@@ -266,6 +309,24 @@ doctype html\n\
 html\n\
   head\n\
   body';
+};
+
+/**
+ * Get Assets
+ * @param html htmlPluginData
+ */
+HtmlWebpackSlimPlugin.prototype.getAssets = function (htmlPluginData) {
+  if (htmlPluginData.assets) {
+    return htmlPluginData.assets;
+  }
+  return (function (str) {
+    var regExp = /([\w-]*\.appcache)/i;
+    var match = regExp.exec(str);
+    if (!match || match.length < 2) {
+      return undefined;
+    }
+    return { manifest: match[1] };
+  })(htmlPluginData.plugin.assetJson);
 };
 
 /**
@@ -350,25 +411,27 @@ HtmlWebpackSlimPlugin.prototype.injectAssets = function (html, head, body, asset
   }
 
   // Inject manifest into the opening html tag
-  html = self.injectManifest(html, assets);
+  if (assets) {
+    html = self.injectManifest(html, assets.manifest);
+  }
   return html;
 };
 
 /**
  * Inject manifest into the opening html tag
  * @param html htmlPluginData.html (Slim)
- * @param assets
+ * @param manifest
  */
-HtmlWebpackSlimPlugin.prototype.injectManifest = function (html, assets) {
-  if (!assets.manifest) {
+HtmlWebpackSlimPlugin.prototype.injectManifest = function (html, manifest) {
+  if (!manifest) {
     return html;
   }
-  return html = html.replace(/^([ |\t]*html.*)$/im, function (match, start) {
+  return html.replace(/^([ |\t]*html.*)$/im, function (match, start) {
     // Append the manifest only if no manifest was specified
     if (/\smanifest\s*=/.test(match)) {
       return match;
     }
-    return start + ' manifest="' + assets.manifest + '"';
+    return start + ' manifest="' + manifest + '"';
   });
 };
 
